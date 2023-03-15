@@ -2,7 +2,6 @@ login: student
 pwd: axv2uh38abGhCryh
 
 Albadri Jamal	10.136.27.44
-Gendre Sébastien	10.136.27.45
 Laroche David	10.136.27.46
 Mami Francesco	10.136.27.47
 Perlini Adriano	10.136.27.48
