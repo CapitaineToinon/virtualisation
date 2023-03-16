@@ -1,8 +1,8 @@
 /// @file gfx.c
 /// @author Florent Gluck
-/// @date November 6, 2016
+/// @date 2016-2020
 /// Helper routines to render pixels in fullscreen graphic mode.
-/// Uses the SDL2 library.
+/// Requires the SDL2 library.
 
 #include "gfx.h"
 
@@ -11,15 +11,16 @@
 /// @param width Width of the window in pixels.
 /// @param height Height of the window in pixels.
 /// @return a pointer to the graphic context or NULL if it failed.
-struct gfx_context_t* gfx_create(char *title, uint width, uint height) {
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) goto error;
-    SDL_Window *window = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED,
-            SDL_WINDOWPOS_UNDEFINED, width, height, 0/*SDL_WINDOW_FULLSCREEN_DESKTOP*/);
+gfx_context_t* gfx_create(char *title, int width, int height) {
+    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+        fprintf(stderr, "%s", SDL_GetError());
+        goto error;
+    }
+    SDL_Window *window = SDL_CreateWindow(title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height, SDL_WINDOW_OPENGL);
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, 0);
-    SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888,
-            SDL_TEXTUREACCESS_STREAMING, width, height);
+    SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, width, height);
     uint32_t *pixels = malloc(width*height*sizeof(uint32_t));
-    struct gfx_context_t *ctxt = malloc(sizeof(struct gfx_context_t));
+    gfx_context_t *ctxt = malloc(sizeof(gfx_context_t));
 
     if (!window || !renderer || !texture || !pixels || !ctxt) goto error;
 
@@ -31,7 +32,7 @@ struct gfx_context_t* gfx_create(char *title, uint width, uint height) {
     ctxt->pixels = pixels;
 
     SDL_ShowCursor(SDL_DISABLE);
-    gfx_clear(ctxt, COLOR_BLACK);
+    gfx_clear(ctxt, GFX_BLACK);
     return ctxt;
 
 error:
@@ -43,7 +44,7 @@ error:
 /// @param x X coordinate of the pixel.
 /// @param y Y coordinate of the pixel.
 /// @param color Color of the pixel.
-void gfx_putpixel(struct gfx_context_t *ctxt, int x, int y, uint32_t color) {
+void gfx_putpixel(gfx_context_t *ctxt, int x, int y, uint32_t color) {
     if (x < ctxt->width && y < ctxt->height)
         ctxt->pixels[ctxt->width*y+x] = color;
 }
@@ -51,7 +52,7 @@ void gfx_putpixel(struct gfx_context_t *ctxt, int x, int y, uint32_t color) {
 /// Clear the specified graphic context.
 /// @param ctxt Graphic context to clear.
 /// @param color Color to use.
-void gfx_clear(struct gfx_context_t *ctxt, uint32_t color) {
+void gfx_clear(gfx_context_t *ctxt, uint32_t color) {
     int n = ctxt->width*ctxt->height;
     while (n)
         ctxt->pixels[--n] = color;
@@ -59,7 +60,7 @@ void gfx_clear(struct gfx_context_t *ctxt, uint32_t color) {
 
 /// Display the graphic context.
 /// @param ctxt Graphic context to clear.
-void gfx_present(struct gfx_context_t *ctxt) {
+void gfx_present(gfx_context_t *ctxt) {
     SDL_UpdateTexture(ctxt->texture, NULL, ctxt->pixels, ctxt->width*sizeof(uint32_t));
     SDL_RenderCopy(ctxt->renderer, ctxt->texture, NULL, NULL);
     SDL_RenderPresent(ctxt->renderer);
@@ -67,7 +68,7 @@ void gfx_present(struct gfx_context_t *ctxt) {
 
 /// Destroy a graphic window.
 /// @param ctxt Graphic context of the window to close.
-void gfx_destroy(struct gfx_context_t *ctxt) {
+void gfx_destroy(gfx_context_t *ctxt) {
     SDL_ShowCursor(SDL_ENABLE);
     SDL_DestroyTexture(ctxt->texture);
     SDL_DestroyRenderer(ctxt->renderer);
@@ -92,3 +93,4 @@ SDL_Keycode gfx_keypressed() {
     }
     return 0;
 }
+
