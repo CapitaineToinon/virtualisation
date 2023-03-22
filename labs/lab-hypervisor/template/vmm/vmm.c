@@ -111,31 +111,49 @@ static void handle_mmio(vm_t *vm)
 static void check_capability(int kvm, int cap, char *cap_string)
 {
     if (!ioctl(kvm, KVM_CHECK_EXTENSION, cap))
+    {
         errx(1, "VMM: Required extension %s not available", cap_string);
+    }
 }
 
 static vm_t *vm_create(const char *guest_binary)
 {
     vm_t *vm = malloc(sizeof(vm_t));
+
     if (!vm)
+    {
         err(1, NULL);
+    }
+
     memset(vm, 0, sizeof(vm_t));
 
     char kvm_dev[] = "/dev/kvm";
     vm->kvmfd = open(kvm_dev, O_RDWR | O_CLOEXEC);
+
     if (vm->kvmfd < 0)
+    {
         err(1, "%s", kvm_dev);
+    }
 
     // Make sure we have the right version of the API
     int version = ioctl(vm->kvmfd, KVM_GET_API_VERSION, NULL);
+
     if (version < 0)
+    {
         err(1, "VMM: KVM_GET_API_VERSION");
+    }
+
     if (version != KVM_API_VERSION)
+    {
         err(1, "VMM: KVM_GET_API_VERSION %d, expected %d", version, KVM_API_VERSION);
+    }
 
     vm->vmfd = ioctl(vm->kvmfd, KVM_CREATE_VM, 0);
+
     if (vm->vmfd < 0)
+    {
         err(1, "VMM: KVM_CREATE_VM");
+    }
 
     // Make sure we can manage guest physical memory slots
     check_capability(vm->kvmfd, KVM_CAP_USER_MEMORY, "KVM_CAP_USER_MEMORY");
@@ -152,8 +170,11 @@ static vm_t *vm_create(const char *guest_binary)
     // Allocate 256KB of RAM for the guest
     vm->guest_mem_size = 4096 * 64;
     vm->guest_mem = mmap(NULL, vm->guest_mem_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+
     if (!vm->guest_mem)
+    {
         err(1, "VMM: allocating guest memory");
+    }
 
     // Map guest_mem to physical address 0 in the guest address space
     struct kvm_userspace_memory_region mem_region = {
@@ -162,33 +183,52 @@ static vm_t *vm_create(const char *guest_binary)
         .memory_size = vm->guest_mem_size,
         .userspace_addr = (uint64_t)vm->guest_mem,
         .flags = 0};
+
     if (ioctl(vm->vmfd, KVM_SET_USER_MEMORY_REGION, &mem_region) < 0)
+    {
         err(1, "VMM: KVM_SET_USER_MEMORY_REGION");
+    }
 
     // Create the vCPU
     vm->vcpufd = ioctl(vm->vmfd, KVM_CREATE_VCPU, 0);
     if (vm->vcpufd < 0)
+    {
         err(1, "VMM: KVM_CREATE_VCPU");
+    }
 
     // Setup memory for the vCPU
     vm->vcpu_mmap_size = ioctl(vm->kvmfd, KVM_GET_VCPU_MMAP_SIZE, NULL);
     if (vm->vcpu_mmap_size < 0)
+    {
         err(1, "VMM: KVM_GET_VCPU_MMAP_SIZE");
+    }
 
     if (vm->vcpu_mmap_size < (int)sizeof(struct kvm_run))
+    {
         err(1, "VMM: KVM_GET_VCPU_MMAP_SIZE unexpectedly small");
+    }
+
     vm->run = mmap(NULL, (size_t)vm->vcpu_mmap_size, PROT_READ | PROT_WRITE, MAP_SHARED, vm->vcpufd, 0);
+
     if (!vm->run)
+    {
         err(1, "VMM: mmap vcpu");
+    }
 
     // Initialize CS to point to 0
     struct kvm_sregs sregs;
     if (ioctl(vm->vcpufd, KVM_GET_SREGS, &sregs) < 0)
+    {
         err(1, "VMM: KVM_GET_SREGS");
+    }
+
     sregs.cs.base = 0;
     sregs.cs.selector = 0;
+
     if (ioctl(vm->vcpufd, KVM_SET_SREGS, &sregs) < 0)
+    {
         err(1, "VMM: KVM_SET_SREGS");
+    }
 
     // Initialize instruction pointer and flags register
     struct kvm_regs regs;
@@ -196,8 +236,11 @@ static vm_t *vm_create(const char *guest_binary)
     regs.rsp = vm->guest_mem_size; // set stack pointer at the top of the guest's RAM
     regs.rip = 0;
     regs.rflags = 0x2; // bit 1 is reserved and should always bet set to 1
+
     if (ioctl(vm->vcpufd, KVM_SET_REGS, &regs) < 0)
+    {
         err(1, "VMM: KVM_SET_REGS");
+    }
 
     return vm;
 }
@@ -209,12 +252,12 @@ static void vm_run(vm_t *vm)
     {
         // Runs the vCPU until encoutering a VM_EXIT
         if (ioctl(vm->vcpufd, KVM_RUN, NULL) < 0)
+        {
             err(1, "VMM: KVM_RUN");
+        }
 
         switch (vm->run->exit_reason)
         {
-            // NOTE: KVM_EXIT_IO is significantly faster than KVM_EXIT_MMIO
-
         case KVM_EXIT_IO: // encountered an I/O instruction
             handle_pmio(vm);
             break;
@@ -244,9 +287,15 @@ static void vm_run(vm_t *vm)
 static void vm_destroy(vm_t *vm)
 {
     if (vm->guest_mem)
+    {
         munmap(vm->guest_mem, vm->guest_mem_size);
+    }
+
     if (vm->run)
+    {
         munmap(vm->run, vm->vcpu_mmap_size);
+    }
+
     close(vm->kvmfd);
     memset(vm, 0, sizeof(vm_t));
     free(vm);
@@ -254,7 +303,10 @@ static void vm_destroy(vm_t *vm)
 
 int main(int argc, char **argv)
 {
-    vm_t *vm = vm_create("my_awesome_guest_os");
+    char *guest_binary = argv[2];
+
+    printf("%s\n", guest_binary);
+    vm_t *vm = vm_create(guest_binary);
     vm_run(vm);
     vm_destroy(vm);
     return EXIT_SUCCESS;
