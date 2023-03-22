@@ -3,10 +3,10 @@
 
 #include <stdint.h>
 
-#define FONT_HEIGHT      16
-#define FONT_WIDTH        8
-#define CHARS_COUNT     256
+#define FONT_HEIGHT 16
+#define FONT_WIDTH 8
+#define CHARS_COUNT 256
 
-extern uint8_t font_8x16[CHARS_COUNT*FONT_HEIGHT];
+extern uint8_t font_8x16[CHARS_COUNT * FONT_HEIGHT];
 
 #endif

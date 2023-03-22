@@ -1,12 +1,13 @@
 #ifndef _VGA_H_
 #define _VGA_H_
 
-#define VGA_FB_ADDR  0xB8000
+#define VGA_FB_ADDR 0xB8000
 #define VGA_FB_PITCH 160
-#define VGA_XRES  80
-#define VGA_YRES  25
+#define VGA_XRES 80
+#define VGA_YRES 25
 
-typedef enum {
+typedef enum
+{
     COL_BLACK = 0,
     COL_BLUE = 1,
     COL_GREEN = 2,
