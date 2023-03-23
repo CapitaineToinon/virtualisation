@@ -5,6 +5,7 @@
 /// Requires the SDL2 library.
 
 #include "gfx.h"
+#include "font.h"
 
 /// Create a fullscreen graphic window.
 /// @param title Title of the window.
@@ -51,6 +52,30 @@ void gfx_putpixel(gfx_context_t *ctxt, int x, int y, uint32_t color)
 {
     if (x < ctxt->width && y < ctxt->height)
         ctxt->pixels[ctxt->width * y + x] = color;
+}
+
+/// Draw a character in the specified graphic context.
+void gfx_putchar(gfx_context_t *ctxt, int x, int y, uint8_t character, uint32_t fg_color, uint32_t bg_color)
+{
+    for (int h = 0; h < FONT_HEIGHT; h++)
+    {
+        uint8_t b = font_8x16[character * FONT_HEIGHT + h];
+
+        for (int w = 0; w < FONT_WIDTH; w++)
+        {
+            int actual_x = (x * FONT_WIDTH) + FONT_WIDTH - w;
+            int actual_y = (y * FONT_HEIGHT) + h;
+
+            if ((b >> w) & 0b1)
+            {
+                gfx_putpixel(ctxt, actual_x, actual_y, bg_color);
+            }
+            else
+            {
+                gfx_putpixel(ctxt, actual_x, actual_y, fg_color);
+            }
+        }
+    }
 }
 
 /// Clear the specified graphic context.

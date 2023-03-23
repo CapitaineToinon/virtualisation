@@ -29,6 +29,7 @@ typedef struct
 } gfx_context_t;
 
 extern void gfx_putpixel(gfx_context_t *ctxt, int x, int y, uint32_t color);
+extern void gfx_putchar(gfx_context_t *ctxt, int x, int y, uint8_t character, uint32_t fg_color, uint32_t bg_color);
 extern void gfx_clear(gfx_context_t *ctxt, uint32_t color);
 extern gfx_context_t *gfx_create(char *text, int width, int height);
 extern void gfx_destroy(gfx_context_t *ctxt);

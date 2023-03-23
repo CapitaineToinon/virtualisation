@@ -17,6 +17,33 @@
 #include <time.h>
 #include <sys/eventfd.h>
 #include <unistd.h>
+#include <pthread.h>
+#include "gfx.h"
+#include "font.h"
+
+#define VGA_FB_ADDR 0xB8000
+#define VGA_FB_PITCH 160
+#define VGA_XRES 80
+#define VGA_YRES 25
+
+uint32_t vga_colors[16] = {
+    GFX_COLOR(0x00, 0x00, 0x00),
+    GFX_COLOR(0x00, 0x00, 0xAA),
+    GFX_COLOR(0x00, 0xAA, 0x00),
+    GFX_COLOR(0x00, 0xAA, 0xAA),
+    GFX_COLOR(0xAA, 0x00, 0x00),
+    GFX_COLOR(0xAA, 0x00, 0xAA),
+    GFX_COLOR(0xAA, 0x55, 0x00),
+    GFX_COLOR(0xAA, 0xAA, 0xAA),
+    GFX_COLOR(0x55, 0x55, 0x55),
+    GFX_COLOR(0x55, 0x55, 0xFF),
+    GFX_COLOR(0x55, 0xFF, 0x55),
+    GFX_COLOR(0x55, 0xFF, 0xFF),
+    GFX_COLOR(0xFF, 0x55, 0x55),
+    GFX_COLOR(0xFF, 0x55, 0xFF),
+    GFX_COLOR(0xFF, 0xFF, 0x55),
+    GFX_COLOR(0xFF, 0xFF, 0xFF),
+};
 
 typedef struct
 {
@@ -30,6 +57,9 @@ typedef struct
     uint8_t *guest_mem;
     u_int guest_mem_size;
 } vm_t;
+
+gfx_context_t *window;
+uint8_t *fb;
 
 static void handle_pmio(vm_t *vm)
 {
@@ -79,7 +109,9 @@ static void handle_pmio(vm_t *vm)
         printf("VMM: PMIO guest read: size=%d port=%d [value injected by VMM=%d]\n", run->io.size, run->io.port, val);
     }
     else
+    {
         fprintf(stderr, "VMM: unhandled KVM_EXIT_IO\n");
+    }
 }
 
 static void handle_mmio(vm_t *vm)
@@ -89,6 +121,7 @@ static void handle_mmio(vm_t *vm)
     if (run->mmio.is_write)
     {
         uint32_t value;
+
         switch (run->mmio.len)
         {
         case 1:
@@ -104,7 +137,11 @@ static void handle_mmio(vm_t *vm)
             fprintf(stderr, "VMM: Unsupported size in KVM_EXIT_MMIO\n");
             value = 0;
         }
-        printf("VMM: MMIO guest write: len=%d addr=%ld value=%d\n", run->mmio.len, (long int)run->mmio.phys_addr, value);
+
+        printf("VMM: MMIO guest write: len=%d addr=%ld value=%d\n", run->mmio.len, (long int)run->mmio.phys_addr - VGA_FB_ADDR, value);
+
+        long int fb_addr = (long int)run->mmio.phys_addr - (long int)VGA_FB_ADDR;
+        fb[fb_addr] = value;
     }
 }
 
@@ -158,14 +195,18 @@ static vm_t *vm_create(const char *guest_binary)
     // Make sure we can manage guest physical memory slots
     check_capability(vm->kvmfd, KVM_CAP_USER_MEMORY, "KVM_CAP_USER_MEMORY");
 
-    // mmap syscall:
-    // 1st arg: specifies at which virtual address to start the mapping; if NULL, kernel chooses the address
-    // 2nd arg: size to allocate (in bytes)
-    // 3rd arg: access type (read, write, etc.)
-    // 4th arg: flags; MAP_ANONYMOUS = mapping not backed by any file and contents initialized to zero
-    // 5th arg: file descriptor if mmap a file (otherwise, set to -1)
-    // 6th arg: offset when mmap a file
-    // IMPORTANT: size must be a multiple of a page (4KB) and address must be on a page boundary!
+    // Open the guest binary and find its size in bytes
+    FILE *fp = fopen(guest_binary, "rb");
+    int fd = fileno(fp);
+
+    fseek(fp, 0L, SEEK_END);
+    int guest_binary_size = ftell(fp);
+    fseek(fp, 0L, SEEK_SET);
+
+    // copy file content to local buffer
+    unsigned char *binary = (unsigned char *)malloc(guest_binary_size * sizeof(unsigned char));
+    fread(binary, sizeof(unsigned char), guest_binary_size, fp);
+    fclose(fp);
 
     // Allocate 256KB of RAM for the guest
     vm->guest_mem_size = 4096 * 64;
@@ -175,6 +216,9 @@ static vm_t *vm_create(const char *guest_binary)
     {
         err(1, "VMM: allocating guest memory");
     }
+
+    memcpy(vm->guest_mem, binary, guest_binary_size);
+    free(binary);
 
     // Map guest_mem to physical address 0 in the guest address space
     struct kvm_userspace_memory_region mem_region = {
@@ -301,13 +345,107 @@ static void vm_destroy(vm_t *vm)
     free(vm);
 }
 
+void *t_vm_run(void *p)
+{
+    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+    pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
+    vm_t *vm = (vm_t *)p;
+    vm_run(vm);
+
+    return (void *)0;
+}
+
 int main(int argc, char **argv)
 {
     char *guest_binary = argv[2];
 
-    printf("%s\n", guest_binary);
+    pthread_t tid;
+    void *status;
+
+    window = gfx_create(guest_binary, 80 * FONT_WIDTH, 25 * FONT_HEIGHT);
+
+    if (!window)
+    {
+        perror("gfx_create failed");
+        return EXIT_FAILURE;
+    }
+
+    printf("sdl2 window created with width %d and height %d\n", window->width, window->height);
+
+    int fb_size = window->width * window->height * sizeof(uint8_t);
+    fb = (uint8_t *)malloc(fb_size);
+
+    if (!fb)
+    {
+        perror("frame buffer malloc failed");
+        return EXIT_FAILURE;
+    }
+
+    memset(fb, 0, fb_size);
+    printf("local frame buffer created\n");
+
     vm_t *vm = vm_create(guest_binary);
-    vm_run(vm);
+
+    if (pthread_create(&tid, NULL, t_vm_run, (void *)vm) != 0)
+    {
+        perror("pthread_create failed");
+        return EXIT_FAILURE;
+    }
+
+    printf("vm_run started\n");
+
+    bool looping = true;
+    while (looping)
+    {
+        gfx_present(window);
+        SDL_KeyCode keypressed = gfx_keypressed();
+
+        switch (keypressed)
+        {
+        case SDLK_ESCAPE:
+            printf("escape was pressed\n");
+            looping = false;
+            break;
+        default:
+            break;
+        }
+
+        uint16_t *_fb = (uint16_t *)fb;
+
+        for (uint16_t i = 0; i < 10; i++)
+        {
+            uint8_t character = (uint8_t)_fb[i];
+            uint8_t attribute = (uint8_t)(_fb[i] >> 8);
+            uint32_t bg = attribute & 0x0F;
+            uint32_t fg = (uint32_t)attribute >> 4;
+            gfx_putchar(window, i, 0, character, vga_colors[fg], vga_colors[bg]);
+        }
+
+        SDL_Delay(16);
+    }
+
+    gfx_destroy(window);
+    free(fb);
+
+    if (pthread_cancel(tid) == -1)
+    {
+        perror("pthread_cancel failed");
+        return EXIT_FAILURE;
+    }
+
+    printf("thread cancel called\n");
+
+    if (pthread_join(tid, &status) == -1)
+    {
+        perror("pthread_join failed");
+        return EXIT_FAILURE;
+    }
+
+    printf("thread joined\n");
+
     vm_destroy(vm);
+    printf("vm destroyed\n");
+
     return EXIT_SUCCESS;
 }
