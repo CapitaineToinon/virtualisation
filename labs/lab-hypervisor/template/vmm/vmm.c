@@ -408,7 +408,7 @@ int main(int argc, char **argv)
     pthread_t tid;
     void *status;
 
-    window = gfx_create(guest_binary, 80 * FONT_WIDTH, 25 * FONT_HEIGHT);
+    window = gfx_create(guest_binary, VGA_XRES * FONT_WIDTH, VGA_YRES * FONT_HEIGHT);
 
     if (!window)
     {
@@ -446,13 +446,15 @@ int main(int argc, char **argv)
 
         uint16_t *_fb = (uint16_t *)fb;
 
-        for (uint16_t i = 0; i < 10; i++)
+        for (uint16_t i = 0; i < VGA_XRES * VGA_YRES; i++)
         {
+            int x = i % VGA_XRES;
+            int y = i / VGA_XRES;
             uint8_t character = (uint8_t)_fb[i];
             uint8_t attribute = (uint8_t)(_fb[i] >> 8);
             uint32_t bg = attribute & 0x0F;
             uint32_t fg = (uint32_t)attribute >> 4;
-            gfx_putchar(window, i, 0, character, vga_colors[fg], vga_colors[bg]);
+            gfx_putchar(window, x, y, character, vga_colors[fg], vga_colors[bg]);
         }
 
         SDL_Delay(16);
