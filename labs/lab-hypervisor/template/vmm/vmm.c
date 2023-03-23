@@ -60,6 +60,7 @@ typedef struct
 
 gfx_context_t *window;
 uint8_t *fb;
+int fb_size;
 
 static void handle_pmio(vm_t *vm)
 {
@@ -140,8 +141,8 @@ static void handle_mmio(vm_t *vm)
 
         printf("VMM: MMIO guest write: len=%d addr=%ld value=%d\n", run->mmio.len, (long int)run->mmio.phys_addr - VGA_FB_ADDR, value);
 
-        long int fb_addr = (long int)run->mmio.phys_addr - (long int)VGA_FB_ADDR;
-        fb[fb_addr] = value;
+        // long int fb_addr = (long int)run->mmio.phys_addr - (long int)VGA_FB_ADDR;
+        // fb[fb_addr] = value;
     }
 }
 
@@ -197,7 +198,6 @@ static vm_t *vm_create(const char *guest_binary)
 
     // Open the guest binary and find its size in bytes
     FILE *fp = fopen(guest_binary, "rb");
-    int fd = fileno(fp);
 
     fseek(fp, 0L, SEEK_END);
     int guest_binary_size = ftell(fp);
@@ -226,9 +226,35 @@ static vm_t *vm_create(const char *guest_binary)
         .guest_phys_addr = 0,
         .memory_size = vm->guest_mem_size,
         .userspace_addr = (uint64_t)vm->guest_mem,
-        .flags = 0};
+        .flags = KVM_MEM_LOG_DIRTY_PAGES};
 
     if (ioctl(vm->vmfd, KVM_SET_USER_MEMORY_REGION, &mem_region) < 0)
+    {
+        err(1, "VMM: KVM_SET_USER_MEMORY_REGION");
+    }
+
+    // Create a frame buffer PMIO for the guest
+    fb_size = window->width * window->height * sizeof(uint8_t);
+    fb = mmap(NULL, fb_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+
+    if (!fb)
+    {
+        perror("frame buffer malloc failed");
+        return EXIT_FAILURE;
+    }
+
+    memset(fb, 0, fb_size);
+    printf("local frame buffer created\n");
+
+    // Map framebuffer to physical address VBA_FB_ADDR in the guest address space
+    struct kvm_userspace_memory_region fb_mem_region = {
+        .slot = 1,
+        .guest_phys_addr = VGA_FB_ADDR,
+        .memory_size = 4096,
+        .userspace_addr = (uint64_t)fb,
+        .flags = KVM_MEM_LOG_DIRTY_PAGES};
+
+    if (ioctl(vm->vmfd, KVM_SET_USER_MEMORY_REGION, &fb_mem_region) < 0)
     {
         err(1, "VMM: KVM_SET_USER_MEMORY_REGION");
     }
@@ -356,9 +382,28 @@ void *t_vm_run(void *p)
     return (void *)0;
 }
 
+char *find_guess_binary(int argc, char **argv)
+{
+    for (int i = 1; i < argc - 1; i++)
+    {
+        if (strcmp(argv[i], "-guest") == 0)
+        {
+            return argv[i + 1];
+        }
+    }
+
+    return NULL;
+}
+
 int main(int argc, char **argv)
 {
-    char *guest_binary = argv[2];
+    char *guest_binary = find_guess_binary(argc, argv);
+
+    if (!guest_binary)
+    {
+        printf("usage: %s -guest <guest_binary>\n", argv[0]);
+        return EXIT_FAILURE;
+    }
 
     pthread_t tid;
     void *status;
@@ -372,18 +417,6 @@ int main(int argc, char **argv)
     }
 
     printf("sdl2 window created with width %d and height %d\n", window->width, window->height);
-
-    int fb_size = window->width * window->height * sizeof(uint8_t);
-    fb = (uint8_t *)malloc(fb_size);
-
-    if (!fb)
-    {
-        perror("frame buffer malloc failed");
-        return EXIT_FAILURE;
-    }
-
-    memset(fb, 0, fb_size);
-    printf("local frame buffer created\n");
 
     vm_t *vm = vm_create(guest_binary);
 
@@ -425,9 +458,6 @@ int main(int argc, char **argv)
         SDL_Delay(16);
     }
 
-    gfx_destroy(window);
-    free(fb);
-
     if (pthread_cancel(tid) == -1)
     {
         perror("pthread_cancel failed");
@@ -446,6 +476,9 @@ int main(int argc, char **argv)
 
     vm_destroy(vm);
     printf("vm destroyed\n");
+
+    gfx_destroy(window);
+    munmap(fb, fb_size);
 
     return EXIT_SUCCESS;
 }
