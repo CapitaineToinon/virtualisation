@@ -1,3 +1,9 @@
 {
-    "C_Cpp.default.cStandard": "gnu11"
+    "C_Cpp.default.cStandard": "gnu11",
+    "files.associations": {
+        "gfx.h": "c",
+        "vga.h": "c",
+        "font.h": "c"
+    },
+    "C_Cpp.default.configurationProvider": "ms-vscode.makefile-tools"
 }
