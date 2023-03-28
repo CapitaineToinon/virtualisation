@@ -117,9 +117,6 @@ static void handle_mmio(vm_t *vm)
         }
 
         printf("VMM: MMIO guest write: len=%d addr=%ld value=%d\n", run->mmio.len, (long int)run->mmio.phys_addr - VGA_FB_ADDR, value);
-
-        // long int fb_addr = (long int)run->mmio.phys_addr - (long int)VGA_FB_ADDR;
-        // fb[fb_addr] = value;
     }
 }
 
