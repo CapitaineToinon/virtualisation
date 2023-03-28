@@ -20,30 +20,7 @@
 #include <pthread.h>
 #include "gfx.h"
 #include "font.h"
-
-#define VGA_FB_ADDR 0xB8000
-#define VGA_FB_PITCH 160
-#define VGA_XRES 80
-#define VGA_YRES 25
-
-uint32_t vga_colors[16] = {
-    GFX_COLOR(0x00, 0x00, 0x00),
-    GFX_COLOR(0x00, 0x00, 0xAA),
-    GFX_COLOR(0x00, 0xAA, 0x00),
-    GFX_COLOR(0x00, 0xAA, 0xAA),
-    GFX_COLOR(0xAA, 0x00, 0x00),
-    GFX_COLOR(0xAA, 0x00, 0xAA),
-    GFX_COLOR(0xAA, 0x55, 0x00),
-    GFX_COLOR(0xAA, 0xAA, 0xAA),
-    GFX_COLOR(0x55, 0x55, 0x55),
-    GFX_COLOR(0x55, 0x55, 0xFF),
-    GFX_COLOR(0x55, 0xFF, 0x55),
-    GFX_COLOR(0x55, 0xFF, 0xFF),
-    GFX_COLOR(0xFF, 0x55, 0x55),
-    GFX_COLOR(0xFF, 0x55, 0xFF),
-    GFX_COLOR(0xFF, 0xFF, 0x55),
-    GFX_COLOR(0xFF, 0xFF, 0xFF),
-};
+#include "shared/vga.h"
 
 typedef struct
 {
@@ -205,7 +182,11 @@ static vm_t *vm_create(const char *guest_binary)
 
     // copy file content to local buffer
     unsigned char *binary = (unsigned char *)malloc(guest_binary_size * sizeof(unsigned char));
-    fread(binary, sizeof(unsigned char), guest_binary_size, fp);
+    if (fread(binary, sizeof(unsigned char), guest_binary_size, fp) == 0)
+    {
+        err(1, "VMM: reading guest binary");
+    }
+
     fclose(fp);
 
     // Allocate 256KB of RAM for the guest
@@ -239,8 +220,7 @@ static vm_t *vm_create(const char *guest_binary)
 
     if (!fb)
     {
-        perror("frame buffer malloc failed");
-        return EXIT_FAILURE;
+        err(1, "VMM: allocating frame buffer");
     }
 
     memset(fb, 0, fb_size);
@@ -454,7 +434,7 @@ int main(int argc, char **argv)
             uint8_t attribute = (uint8_t)(_fb[i] >> 8);
             uint32_t bg = attribute & 0x0F;
             uint32_t fg = (uint32_t)attribute >> 4;
-            gfx_putchar(window, x, y, character, vga_colors[fg], vga_colors[bg]);
+            gfx_putchar(window, x, y, character, gfx_colors[fg], gfx_colors[bg]);
         }
 
         SDL_Delay(16);

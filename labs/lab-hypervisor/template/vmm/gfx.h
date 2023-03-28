@@ -18,6 +18,9 @@
 #define GFX_WHITE 0x00FFFFFF
 #define GFX_YELLOW 0x00FFFF00
 
+#define GFX_COLORS_COUNT 16
+extern uint32_t gfx_colors[GFX_COLORS_COUNT];
+
 typedef struct
 {
     SDL_Window *window;
