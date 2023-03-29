@@ -18,12 +18,7 @@ void state_9(struct ide *ide, struct kvm_run *run);
 void reset_and_goto_1(struct ide *ide)
 {
     printf("going back to 1\n");
-
-    for (int i = 0; i < SECTOR_SIZE; i++)
-    {
-        ((uint8_t *)ide->data)[i] = 0;
-    }
-
+    memset(ide->data, 0, SECTOR_SIZE);
     ide->data_count = 0;
     ide->sector_idx = 0;
     ide->next = &state_1;
