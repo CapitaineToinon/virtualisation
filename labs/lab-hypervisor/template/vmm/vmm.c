@@ -20,6 +20,7 @@
 #include <pthread.h>
 #include "gfx.h"
 #include "font.h"
+#include "ide.h"
 #include "shared/vga.h"
 
 typedef struct
@@ -38,58 +39,12 @@ typedef struct
 gfx_context_t *window;
 uint8_t *fb;
 int fb_size;
+ide_t *machine;
 
 static void handle_pmio(vm_t *vm)
 {
     struct kvm_run *run = vm->run;
-    // Guest wrote to an I/O port
-    if (run->io.direction == KVM_EXIT_IO_OUT)
-    {
-        uint8_t *addr = (uint8_t *)run + run->io.data_offset;
-        uint32_t value;
-        switch (run->io.size)
-        {
-        case 1: // retrieve the 8-bit value written by the guest
-            value = *(uint8_t *)addr;
-            break;
-        case 2: // retrieve the 16-bit value written by the guest
-            value = *(uint16_t *)addr;
-            break;
-        default:
-            fprintf(stderr, "VMM: Unsupported size in KVM_EXIT_IO\n");
-            value = 0;
-        }
-        printf("VMM: PMIO guest write: size=%d port=%d value=%d\n", run->io.size, run->io.port, value);
-    }
-    // Guest read from an I/O port
-    else if (run->io.direction == KVM_EXIT_IO_IN)
-    {
-        int val;
-        switch (run->io.size)
-        {
-        case 1: // the guest is reading 8-bit from the port
-        {
-            uint8_t *addr = (uint8_t *)run + run->io.data_offset;
-            val = 42; // dummy 8-bit value injected into the guest
-            *addr = val;
-        }
-        break;
-        case 2: // the guest is reading 16-bit from the port
-        {
-            uint16_t *addr = (uint16_t *)((uint8_t *)run + run->io.data_offset);
-            val = 42; // dummy 16-bit value injected into the guest
-            *addr = val;
-        }
-        break;
-        default:
-            fprintf(stderr, "VMM: Unsupported size in KVM_EXIT_IO\n");
-        }
-        printf("VMM: PMIO guest read: size=%d port=%d [value injected by VMM=%d]\n", run->io.size, run->io.port, val);
-    }
-    else
-    {
-        fprintf(stderr, "VMM: unhandled KVM_EXIT_IO\n");
-    }
+    machine->next(machine, run);
 }
 
 static void handle_mmio(vm_t *vm)
@@ -374,6 +329,8 @@ char *find_guess_binary(int argc, char **argv)
 
 int main(int argc, char **argv)
 {
+    machine = create_ide_state_machine(argv[4]);
+
     char *guest_binary = find_guess_binary(argc, argv);
 
     if (!guest_binary)
@@ -458,6 +415,10 @@ int main(int argc, char **argv)
 
     gfx_destroy(window);
     munmap(fb, fb_size);
+    printf("gfx destroyed\n");
+
+    destroy_ide_state_machine(machine);
+    printf("ide state machine destroyed\n");
 
     return EXIT_SUCCESS;
 }

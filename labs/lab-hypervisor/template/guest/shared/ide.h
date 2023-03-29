@@ -1,7 +1,7 @@
 #ifndef _IDE_H_
 #define _IDE_H_
 
-#define SECTOR_SIZE 512
+#include "../../shared/ide.h"
 
 // Write a sector.
 // Real hardware emulated version.
