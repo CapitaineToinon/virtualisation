@@ -1,7 +1,7 @@
 #ifndef _VGA_H_
 #define _VGA_H_
 
-#include "shared/vga.h"
+#include "../../shared/vga.h"
 
 // Display a character.
 // Real hardware emulated version.

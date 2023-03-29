@@ -21,6 +21,7 @@
 #include "gfx.h"
 #include "font.h"
 #include "ide.h"
+#include "ide_pv.h"
 #include "shared/vga.h"
 
 typedef struct
@@ -38,13 +39,16 @@ typedef struct
 
 gfx_context_t *window;
 uint8_t *fb;
+hypercall_t *hypercall;
 int fb_size;
 ide_t *machine;
+hypercall_host_t *hypercall_host;
 
 static void handle_pmio(vm_t *vm)
 {
     struct kvm_run *run = vm->run;
     machine->next(machine, run);
+    hypercall_host->next(hypercall_host, hypercall, run);
 }
 
 static void handle_mmio(vm_t *vm)
@@ -166,7 +170,7 @@ static vm_t *vm_create(const char *guest_binary)
         err(1, "VMM: KVM_SET_USER_MEMORY_REGION");
     }
 
-    // Create a frame buffer PMIO for the guest
+    // Create a frame buffer for the guest
     fb_size = window->width * window->height * sizeof(uint8_t);
     fb = mmap(NULL, fb_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 
@@ -187,6 +191,29 @@ static vm_t *vm_create(const char *guest_binary)
         .flags = KVM_MEM_LOG_DIRTY_PAGES};
 
     if (ioctl(vm->vmfd, KVM_SET_USER_MEMORY_REGION, &fb_mem_region) < 0)
+    {
+        err(1, "VMM: KVM_SET_USER_MEMORY_REGION");
+    }
+
+    // Create an hypercall buffer for the guest
+    hypercall = mmap(NULL, sizeof(hypercall_t *), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+
+    if (!hypercall)
+    {
+        err(1, "VMM: allocating hypercall");
+    }
+
+    printf("hypercall buffer created\n");
+
+    // Map framebuffer to physical address VBA_FB_ADDR in the guest address space
+    struct kvm_userspace_memory_region hypercall_mem_region = {
+        .slot = 2,
+        .guest_phys_addr = HYPERCALL_ADDR,
+        .memory_size = 4096,
+        .userspace_addr = (uint64_t)hypercall,
+        .flags = KVM_MEM_LOG_DIRTY_PAGES};
+
+    if (ioctl(vm->vmfd, KVM_SET_USER_MEMORY_REGION, &hypercall_mem_region) < 0)
     {
         err(1, "VMM: KVM_SET_USER_MEMORY_REGION");
     }
@@ -330,6 +357,7 @@ char *find_guess_binary(int argc, char **argv)
 int main(int argc, char **argv)
 {
     machine = create_ide_state_machine(argv[4]);
+    hypercall_host = create_hypercall_host(argv[4]);
 
     char *guest_binary = find_guess_binary(argc, argv);
 
@@ -419,6 +447,9 @@ int main(int argc, char **argv)
 
     destroy_ide_state_machine(machine);
     printf("ide state machine destroyed\n");
+
+    destroy_hypercall_host(hypercall_host);
+    printf("hypercall host destroyed\n");
 
     return EXIT_SUCCESS;
 }

@@ -1,8 +1,9 @@
 #include <stdint.h>
-#include "ide.h"
+#include <string.h>
 
-#define STATUS_PORT 0x1F7
-#define DATA_PORT 0x1F0
+#include "ide.h"
+#include "pmio.h"
+#include "../../shared/ide_pv.h"
 
 /**
  * Write a sector using paravirtualization.
@@ -11,5 +12,14 @@
  */
 void ide_write_sector_pv(int sector_idx, void *src)
 {
-    // ...
+    hypercall_t *addr = (hypercall_t *)HYPERCALL_ADDR;
+    addr->sector_idx = sector_idx;
+
+    char *data = (char *)src;
+    for (int i = 0; i < SECTOR_SIZE; i++)
+    {
+        addr->data[i] = (char)data[i];
+    }
+
+    outb(HYPERCALL_PORT, HYPERCALL_MAGIC);
 }

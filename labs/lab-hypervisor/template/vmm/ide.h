@@ -21,5 +21,6 @@ typedef struct ide ide_t;
 
 ide_t *create_ide_state_machine(char *disk_path);
 void destroy_ide_state_machine(ide_t *ide);
+void write_data_to_sector(char *disk_path, int sector_idx, void *data);
 
 #endif

@@ -4,7 +4,10 @@
     "gfx.h": "c",
     "vga.h": "c",
     "font.h": "c",
-    "ide.h": "c"
+    "ide.h": "c",
+    "ide_pv.h": "c",
+    "kvm.h": "c",
+    "stdint.h": "c"
   },
   "C_Cpp.default.configurationProvider": "ms-vscode.makefile-tools"
 }

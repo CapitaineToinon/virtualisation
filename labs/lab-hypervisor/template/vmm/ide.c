@@ -225,16 +225,21 @@ void state_9(struct ide *ide, struct kvm_run *run)
 
 void write_file(ide_t *ide)
 {
-    printf("writing to file %s\n", ide->disk_path);
-    FILE *fp = fopen(ide->disk_path, "r+b");
+    write_data_to_sector(ide->disk_path, ide->sector_idx, ide->data);
+}
+
+void write_data_to_sector(char *disk_path, int sector_idx, void *data)
+{
+    printf("writing to file %s\n", disk_path);
+    FILE *fp = fopen(disk_path, "r+b");
     if (fp == NULL)
     {
         printf("failed to open disk.img\n");
         return;
     }
 
-    fseek(fp, ide->sector_idx * SECTOR_SIZE, SEEK_SET);
-    fwrite(ide->data, 1, SECTOR_SIZE, fp);
+    fseek(fp, sector_idx * SECTOR_SIZE, SEEK_SET);
+    fwrite(data, 1, SECTOR_SIZE, fp);
     fclose(fp);
 }
 
