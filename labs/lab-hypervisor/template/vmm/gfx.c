@@ -87,11 +87,11 @@ void gfx_putchar(gfx_context_t *ctxt, int x, int y, uint8_t character, uint32_t 
 
             if ((b >> w) & 0b1)
             {
-                gfx_putpixel(ctxt, actual_x, actual_y, bg_color);
+                gfx_putpixel(ctxt, actual_x, actual_y, fg_color);
             }
             else
             {
-                gfx_putpixel(ctxt, actual_x, actual_y, fg_color);
+                gfx_putpixel(ctxt, actual_x, actual_y, bg_color);
             }
         }
     }

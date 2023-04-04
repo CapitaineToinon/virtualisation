@@ -188,7 +188,7 @@ static vm_t *vm_create(const char *guest_binary)
         .guest_phys_addr = VGA_FB_ADDR,
         .memory_size = 4096,
         .userspace_addr = (uint64_t)fb,
-        .flags = KVM_MEM_LOG_DIRTY_PAGES};
+        .flags = 0};
 
     if (ioctl(vm->vmfd, KVM_SET_USER_MEMORY_REGION, &fb_mem_region) < 0)
     {
@@ -414,8 +414,8 @@ int main(int argc, char **argv)
             int y = i / VGA_XRES;
             uint8_t character = (uint8_t)_fb[i];
             uint8_t attribute = (uint8_t)(_fb[i] >> 8);
-            uint32_t bg = attribute & 0x0F;
-            uint32_t fg = (uint32_t)attribute >> 4;
+            uint32_t fg = attribute & 0x0F;
+            uint32_t bg = (uint32_t)attribute >> 4;
             gfx_putchar(window, x, y, character, gfx_colors[fg], gfx_colors[bg]);
         }
 
