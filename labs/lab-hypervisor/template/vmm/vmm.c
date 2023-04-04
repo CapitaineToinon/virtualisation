@@ -171,7 +171,7 @@ static vm_t *vm_create(const char *guest_binary)
     }
 
     // Create a frame buffer for the guest
-    fb_size = window->width * window->height * sizeof(uint8_t);
+    fb_size = VGA_XRES * VGA_YRES * sizeof(uint16_t);
     fb = mmap(NULL, fb_size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 
     if (!fb)
